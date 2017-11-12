@@ -1,9 +1,9 @@
-from pydub import AudioSegment
 import glob
 from music21 import converter, instrument, note, chord
 import json
 import pickle
 import numpy
+from math import ceil
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import Dropout
@@ -16,23 +16,42 @@ notes = []
 
 for file in glob.glob("midi_songs/*.mid"):
   print(file)
+  print(len(notes))
+
+  prevOffset = 0
 
   midi = converter.parse(file)
 
-  try:
+  try: # file has instrument parts
     s2 = instrument.partitionByInstrument(midi)
 
     for element in s2.parts[0].recurse():
+      diffOffset = float(element.offset) - float(prevOffset)
+      if(diffOffset >= 1):
+        notes.append('rest-'+str(min(4, (0.5 * ceil(2.0 * diffOffset)))-0.5))
       if isinstance(element, note.Note):
         notes.append(str(element.pitch))
       elif isinstance(element, chord.Chord):
         notes.append('.'.join(str(n) for n in element.normalOrder))
-  except:
-    print('Midi file does not contain instrumental partition. Skipping...')
 
-    
+      prevOffset = element.offset
+  except: # file has notes in a flat structure
+    print('ye')
+    #for element in midi.flat.notes:
+      #if(element.offset - prevOffset >= 1):
+        #notes.append('rest-'+str(min(3, (0.5 * ceil(2.0 * element.offset)))-0.5))
+      #if isinstance(element, note.Note):
+        #notes.append(str(element.pitch))
+      #elif isinstance(element, chord.Chord):
+        #notes.append('.'.join(str(n) for n in element.normalOrder))
+
+      #prevOffset = element.offset
+      
 # get all pitch names
 pitchnames = sorted(set(item for item in notes))
+
+print(pitchnames)
+print(len(set(pitchnames)))
 
 with open('data/notes', 'wb') as fp:
     pickle.dump(notes, fp)
@@ -73,7 +92,7 @@ model.add(Dropout(0.3))
 model.add(LSTM(512, return_sequences=True))
 model.add(Dropout(0.3))
 model.add(LSTM(512))
-model.add(Dense(256))
+model.add(Dense(512))
 model.add(Dropout(0.3))
 model.add(Dense(n_vocab))
 model.add(Activation('softmax'))
