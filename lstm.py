@@ -1,9 +1,9 @@
-from pydub import AudioSegment
 import glob
 from music21 import converter, instrument, note, chord
 import json
 import pickle
 import numpy
+from math import ceil
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import Dropout
@@ -16,33 +16,37 @@ notes = []
 
 for file in glob.glob("midi_songs/*.mid"):
   print(file)
+  print(len(notes))
+
+  prevOffset = 0
 
   midi = converter.parse(file)
 
-  try:
-    s2 = instrument.partitionByInstrument(midi)
+  notesToParse = None
 
-    for element in s2.parts[0].recurse():
+  try: # file has instrument parts
+    s2 = instrument.partitionByInstrument(midi)
+    notesToParse = s2.parts[0].recurse() 
+  except: # file has notes in a flat structure
+    notesToParse = midi.flat.notes
+
+  for element in notesToParse:
       if isinstance(element, note.Note):
         notes.append(str(element.pitch))
       elif isinstance(element, chord.Chord):
         notes.append('.'.join(str(n) for n in element.normalOrder))
-  except:
-    print('Midi file does not contain instrumental partition. Skipping...')
-
-    
+      
 # get all pitch names
 pitchnames = sorted(set(item for item in notes))
+
+print(pitchnames)
+print(len(set(pitchnames)))
 
 with open('data/notes', 'wb') as fp:
     pickle.dump(notes, fp)
 
 # create a dictionary to map pitches to integers
 note_to_int = dict((note, number) for number, note in enumerate(pitchnames))
-
-# we want to store this to save work for the predictions
-with open('data/note_to_int.json', 'w') as file:
-     file.write(json.dumps(note_to_int))
 
 # get amount of pitch names
 n_vocab = len(set(notes))
