@@ -22,30 +22,19 @@ for file in glob.glob("midi_songs/*.mid"):
 
   midi = converter.parse(file)
 
+  notesToParse = None
+
   try: # file has instrument parts
     s2 = instrument.partitionByInstrument(midi)
+    notesToParse = s2.parts[0].recurse() 
+  except: # file has notes in a flat structure
+    notesToParse = midi.flat.notes
 
-    for element in s2.parts[0].recurse():
-      diffOffset = float(element.offset) - float(prevOffset)
-      if(diffOffset >= 1):
-        notes.append('rest-'+str(min(4, (0.5 * ceil(2.0 * diffOffset)))-0.5))
+  for element in notesToParse:
       if isinstance(element, note.Note):
         notes.append(str(element.pitch))
       elif isinstance(element, chord.Chord):
         notes.append('.'.join(str(n) for n in element.normalOrder))
-
-      prevOffset = element.offset
-  except: # file has notes in a flat structure
-    print('ye')
-    #for element in midi.flat.notes:
-      #if(element.offset - prevOffset >= 1):
-        #notes.append('rest-'+str(min(3, (0.5 * ceil(2.0 * element.offset)))-0.5))
-      #if isinstance(element, note.Note):
-        #notes.append(str(element.pitch))
-      #elif isinstance(element, chord.Chord):
-        #notes.append('.'.join(str(n) for n in element.normalOrder))
-
-      #prevOffset = element.offset
       
 # get all pitch names
 pitchnames = sorted(set(item for item in notes))
@@ -58,10 +47,6 @@ with open('data/notes', 'wb') as fp:
 
 # create a dictionary to map pitches to integers
 note_to_int = dict((note, number) for number, note in enumerate(pitchnames))
-
-# we want to store this to save work for the predictions
-with open('data/note_to_int.json', 'w') as file:
-     file.write(json.dumps(note_to_int))
 
 # get amount of pitch names
 n_vocab = len(set(notes))
@@ -92,7 +77,7 @@ model.add(Dropout(0.3))
 model.add(LSTM(512, return_sequences=True))
 model.add(Dropout(0.3))
 model.add(LSTM(512))
-model.add(Dense(512))
+model.add(Dense(256))
 model.add(Dropout(0.3))
 model.add(Dense(n_vocab))
 model.add(Activation('softmax'))
