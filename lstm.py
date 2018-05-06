@@ -32,13 +32,14 @@ def get_notes():
     for file in glob.glob("midi_songs/*.mid"):
         midi = converter.parse(file)
 
+        print("Parsing %s" % file)
+
         notes_to_parse = None
 
-        parts = instrument.partitionByInstrument(midi)
-
-        if parts: # file has instrument parts
-            notes_to_parse = parts.parts[0].recurse()
-        else: # file has notes in a flat structure
+        try: # file has instrument parts
+            s2 = instrument.partitionByInstrument(midi)
+            notes_to_parse = s2.parts[0].recurse() 
+        except: # file has notes in a flat structure
             notes_to_parse = midi.flat.notes
 
         for element in notes_to_parse:
