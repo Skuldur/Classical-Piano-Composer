@@ -2,7 +2,6 @@
     trained neural network """
 import pickle
 import numpy
-import sys
 from music21 import instrument, note, stream, chord
 from keras.models import Sequential
 from keras.layers import Dense
@@ -68,8 +67,7 @@ def create_network(network_input, n_vocab):
     model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
 
     # Load the weights to each node
-    weight_source = sys.argv[1] or 'weights.hdf5'
-    model.load_weights(weight_source)
+    model.load_weights('weights.hdf5')
 
     return model
 
