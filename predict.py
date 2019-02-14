@@ -2,11 +2,14 @@
     trained neural network """
 import pickle
 import numpy
+import time
+
 from music21 import instrument, note, stream, chord
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import Dropout
 from keras.layers import LSTM
+from keras.layers import BatchNormalization
 from keras.layers import Activation
 
 def generate():
@@ -50,22 +53,23 @@ def prepare_sequences(notes, pitchnames, n_vocab):
 
 def create_network(network_input, n_vocab):
     """ create the structure of the neural network """
+    size = 3
     model = Sequential()
     model.add(LSTM(
-        512,
+        512 * size,
         input_shape=(network_input.shape[1], network_input.shape[2]),
         return_sequences=True
     ))
     model.add(Dropout(0.3))
-    model.add(LSTM(512, return_sequences=True))
+    model.add(LSTM(512 * size, return_sequences=True))
     model.add(Dropout(0.3))
-    model.add(LSTM(512))
-    model.add(Dense(256))
-    model.add(Dropout(0.3))
+    model.add(LSTM(512 * size))
+    #model.add(Dense(256))
+    #model.add(Dropout(0.3))
+    model.add(BatchNormalization())
     model.add(Dense(n_vocab))
     model.add(Activation('softmax'))
-    model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
-
+    model.compile(loss='categorical_crossentropy', optimizer='adagrad')
     # Load the weights to each node
     model.load_weights('weights.hdf5')
 
@@ -124,11 +128,11 @@ def create_midi(prediction_output):
             output_notes.append(new_note)
 
         # increase offset each iteration so that notes do not stack
-        offset += 0.5
+        offset += 0.37
 
     midi_stream = stream.Stream(output_notes)
 
-    midi_stream.write('midi', fp='test_output.mid')
+    midi_stream.write('midi', fp='%s.mid' % str(time.time()))
 
 if __name__ == '__main__':
     generate()

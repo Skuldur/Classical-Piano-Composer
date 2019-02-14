@@ -7,7 +7,9 @@ from music21 import converter, instrument, note, chord
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import Dropout
+#from keras.layers import CuDNNLSTM
 from keras.layers import LSTM
+from keras.layers import BatchNormalization
 from keras.layers import Activation
 from keras.utils import np_utils
 from keras.callbacks import ModelCheckpoint
@@ -15,12 +17,18 @@ from keras.callbacks import ModelCheckpoint
 def train_network():
     """ Train a Neural Network to generate music """
     notes = get_notes()
+    #print("Loading notes")
+    #with open('data/notes', 'rb') as filepath:
+    #    notes = pickle.load(filepath)
 
     # get amount of pitch names
     n_vocab = len(set(notes))
+    print("Size of vocab: %s" % n_vocab)
 
+    print("Preparing sequences")
     network_input, network_output = prepare_sequences(notes, n_vocab)
 
+    print("Creating metwork")
     model = create_network(network_input, n_vocab)
 
     train(model, network_input, network_output)
@@ -29,10 +37,12 @@ def get_notes():
     """ Get all the notes and chords from the midi files in the ./midi_songs directory """
     notes = []
 
+    count = 0
     for file in glob.glob("midi_songs/*.mid"):
         midi = converter.parse(file)
 
-        print("Parsing %s" % file)
+        count += 1
+        print("[%3d] Parsing %s" % (count, file))
 
         notes_to_parse = None
 
@@ -86,21 +96,23 @@ def prepare_sequences(notes, n_vocab):
 
 def create_network(network_input, n_vocab):
     """ create the structure of the neural network """
+    size = 3
     model = Sequential()
     model.add(LSTM(
-        512,
+        512 * size,
         input_shape=(network_input.shape[1], network_input.shape[2]),
         return_sequences=True
     ))
     model.add(Dropout(0.3))
-    model.add(LSTM(512, return_sequences=True))
+    model.add(LSTM(512 * size, return_sequences=True))
     model.add(Dropout(0.3))
-    model.add(LSTM(512))
-    model.add(Dense(256))
-    model.add(Dropout(0.3))
+    model.add(LSTM(512 * size))
+    #model.add(Dense(256))
+    #model.add(Dropout(0.3))
+    model.add(BatchNormalization())
     model.add(Dense(n_vocab))
     model.add(Activation('softmax'))
-    model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
+    model.compile(loss='categorical_crossentropy', optimizer='adagrad')
 
     return model
 
@@ -116,7 +128,7 @@ def train(model, network_input, network_output):
     )
     callbacks_list = [checkpoint]
 
-    model.fit(network_input, network_output, epochs=200, batch_size=64, callbacks=callbacks_list)
+    model.fit(network_input, network_output, epochs=1000, batch_size=64, callbacks=callbacks_list)
 
 if __name__ == '__main__':
     train_network()
