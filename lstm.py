@@ -4,13 +4,16 @@ import glob
 import pickle
 import numpy
 from music21 import converter, instrument, note, chord
-from keras.models import Sequential
-from keras.layers import Dense
-from keras.layers import Dropout
-from keras.layers import LSTM
-from keras.layers import Activation
 from keras.utils import np_utils
 from keras.callbacks import ModelCheckpoint
+from keras.layers import Dense, CuDNNLSTM, Embedding, Input, Dropout, LSTM
+from keras.models import Model, model_from_json
+import math
+from keras.utils import Sequence, get_file
+
+B_NOTE = '2'
+I_NOTE = '1'
+REST = '0'
 
 def train_network():
     """ Train a Neural Network to generate music """
@@ -18,10 +21,11 @@ def train_network():
 
     # get amount of pitch names
     n_vocab = len(set(notes))
+    print('The vocabulary is', n_vocab)
 
     network_input, network_output = prepare_sequences(notes, n_vocab)
 
-    model = create_network(network_input, n_vocab)
+    model = create_network(network_input, n_vocab, set(notes))
 
     train(model, network_input, network_output)
 
@@ -44,14 +48,48 @@ def get_notes():
 
         for element in notes_to_parse:
             if isinstance(element, note.Note):
-                notes.append(str(element.pitch))
+                #print(str(element.pitch), element.pitch.pitchClass)
+                note_class = element.pitch.pitchClass
+                for i in range(0, int(float(element.duration.quarterLength)/0.25)):
+                    curr_time = [REST]*12
+
+                    if i == 0:
+                        curr_time[note_class] = B_NOTE
+                    else:
+                        curr_time[note_class] = I_NOTE
+
+                    notes.append(curr_time)
+                #s.add(element.name)
             elif isinstance(element, chord.Chord):
-                notes.append('.'.join(str(n) for n in element.normalOrder))
+                #print(str(element.normalOrder), float(element.duration.quarterLength))
+                #notes.append('.'.join(str(n) for n in element.normalOrder))
+
+                for i in range(0, int(float(element.duration.quarterLength)/0.25)):
+                    curr_time = [REST]*12
+
+                    for n in element.normalOrder:
+                        note_class = n
+                        if i == 0:
+                            curr_time[note_class] = B_NOTE
+                        else:
+                            curr_time[note_class] = I_NOTE
+
+                    notes.append(curr_time)
+            elif isinstance(element, note.Rest):
+                for i in range(0, int(float(element.duration.quarterLength)/0.25)):
+                    curr_time = [REST]*12
+
+                    notes.append(curr_time)
+
+
+    str_notation_notes = []
+    for time in notes:
+        str_notation_notes.append('.'.join(time))
 
     with open('data/notes', 'wb') as filepath:
-        pickle.dump(notes, filepath)
+        pickle.dump(str_notation_notes, filepath)
 
-    return notes
+    return str_notation_notes
 
 def prepare_sequences(notes, n_vocab):
     """ Prepare the sequences used by the Neural Network """
@@ -76,30 +114,35 @@ def prepare_sequences(notes, n_vocab):
     n_patterns = len(network_input)
 
     # reshape the input into a format compatible with LSTM layers
-    network_input = numpy.reshape(network_input, (n_patterns, sequence_length, 1))
+    #network_input = numpy.reshape(network_input, (n_patterns, sequence_length, 1))
     # normalize input
-    network_input = network_input / float(n_vocab)
+    #network_input = network_input / float(n_vocab)
 
     network_output = np_utils.to_categorical(network_output)
 
     return (network_input, network_output)
 
-def create_network(network_input, n_vocab):
+def create_network(network_input, n_vocab, pitchnames):
     """ create the structure of the neural network """
-    model = Sequential()
-    model.add(LSTM(
-        512,
-        input_shape=(network_input.shape[1], network_input.shape[2]),
-        return_sequences=True
-    ))
-    model.add(Dropout(0.3))
-    model.add(LSTM(512, return_sequences=True))
-    model.add(Dropout(0.3))
-    model.add(LSTM(512))
-    model.add(Dense(256))
-    model.add(Dropout(0.3))
-    model.add(Dense(n_vocab))
-    model.add(Activation('softmax'))
+    input_layer = Input(shape=(None,))
+    emb_node = Embedding(input_dim=len(pitchnames)+1, output_dim=50)(input_layer)
+    x = LSTM(
+        256,
+        return_sequences=True,
+        recurrent_dropout=0.2,
+    )(emb_node)
+    x = LSTM(
+        256,
+        return_sequences=True,
+        recurrent_dropout=0.2,
+    )(x)
+    x = LSTM(
+        256,
+    )(x)
+    x = Dense(512)(x)
+    output_layer = Dense(n_vocab, activation='softmax')(x)
+
+    model = Model(inputs=input_layer, outputs=output_layer)
     model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
 
     return model
@@ -116,7 +159,35 @@ def train(model, network_input, network_output):
     )
     callbacks_list = [checkpoint]
 
-    model.fit(network_input, network_output, epochs=200, batch_size=64, callbacks=callbacks_list)
+    train_seq = TrainSequence(network_input, network_output, 128)
+
+    model.fit_generator(
+        generator=train_seq,
+        epochs=100,
+        verbose=1,
+        shuffle=False,
+        callbacks=callbacks_list
+    )
+
+
+
+class TrainSequence(Sequence):
+
+    def __init__(self, x, y, batch_size=1, preprocess=None):
+        self.x = x
+        self.y = y
+        self.batch_size = batch_size
+
+    def __getitem__(self, idx):
+        batch_x = self.x[idx * self.batch_size: (idx + 1) * self.batch_size]
+        batch_y = self.y[idx * self.batch_size: (idx + 1) * self.batch_size]
+
+        return numpy.asarray(batch_x), numpy.asarray(batch_y)
+
+    def __len__(self):
+        return math.ceil(len(self.x) / self.batch_size)
+
+
 
 if __name__ == '__main__':
     train_network()

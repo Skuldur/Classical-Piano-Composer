@@ -2,12 +2,15 @@
     trained neural network """
 import pickle
 import numpy
-from music21 import instrument, note, stream, chord
+from music21 import instrument, note, stream, chord, duration
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import Dropout
 from keras.layers import LSTM
 from keras.layers import Activation
+import keras.layers as layers
+from keras.layers import Dense, CuDNNLSTM, LSTM, concatenate, SpatialDropout1D, Bidirectional, Embedding, Input, Dropout, TimeDistributed, GlobalAveragePooling1D
+from keras.models import Model, model_from_json
 
 def generate():
     """ Generate a piano midi file """
@@ -21,7 +24,7 @@ def generate():
     n_vocab = len(set(notes))
 
     network_input, normalized_input = prepare_sequences(notes, pitchnames, n_vocab)
-    model = create_network(normalized_input, n_vocab)
+    model = create_network(normalized_input, n_vocab, pitchnames)
     prediction_output = generate_notes(model, network_input, pitchnames, n_vocab)
     create_midi(prediction_output)
 
@@ -48,26 +51,31 @@ def prepare_sequences(notes, pitchnames, n_vocab):
 
     return (network_input, normalized_input)
 
-def create_network(network_input, n_vocab):
+def create_network(network_input, n_vocab, pitchnames):
     """ create the structure of the neural network """
-    model = Sequential()
-    model.add(LSTM(
-        512,
-        input_shape=(network_input.shape[1], network_input.shape[2]),
-        return_sequences=True
-    ))
-    model.add(Dropout(0.3))
-    model.add(LSTM(512, return_sequences=True))
-    model.add(Dropout(0.3))
-    model.add(LSTM(512))
-    model.add(Dense(256))
-    model.add(Dropout(0.3))
-    model.add(Dense(n_vocab))
-    model.add(Activation('softmax'))
+    input_layer = Input(shape=(None,))
+    emb_node = Embedding(input_dim=len(pitchnames)+1, output_dim=50)(input_layer)
+    x = LSTM(
+        256,
+        return_sequences=True,
+        recurrent_dropout=0.2,
+    )(emb_node)
+    x = LSTM(
+        256,
+        return_sequences=True,
+        recurrent_dropout=0.2,
+    )(x)
+    x = LSTM(
+        256,
+    )(x)
+    x = Dense(256)(x)
+    output_layer = Dense(n_vocab, activation='softmax')(x)
+
+    model = Model(inputs=input_layer, outputs=output_layer)
     model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
 
     # Load the weights to each node
-    model.load_weights('weights.hdf5')
+    model.load_weights('weights-improvement-50-0.5947-bigger.hdf5')
 
     return model
 
@@ -79,16 +87,18 @@ def generate_notes(model, network_input, pitchnames, n_vocab):
     int_to_note = dict((number, note) for number, note in enumerate(pitchnames))
 
     pattern = network_input[start]
+    print(pattern)
     prediction_output = []
 
     # generate 500 notes
     for note_index in range(500):
-        prediction_input = numpy.reshape(pattern, (1, len(pattern), 1))
-        prediction_input = prediction_input / float(n_vocab)
+        prediction_input = numpy.reshape(pattern, (1, len(pattern)))
+        #prediction_input = prediction_input / float(n_vocab)
+        #print(prediction_input)
+        prediction = model.predict(prediction_input, verbose=0)[0]
 
-        prediction = model.predict(prediction_input, verbose=0)
-
-        index = numpy.argmax(prediction)
+        index = sample(prediction, 0.3)
+        print('the index', index)
         result = int_to_note[index]
         prediction_output.append(result)
 
@@ -113,22 +123,35 @@ def create_midi(prediction_output):
                 new_note = note.Note(int(current_note))
                 new_note.storedInstrument = instrument.Piano()
                 notes.append(new_note)
-            new_chord = chord.Chord(notes)
+            d = duration.Duration()
+            d.quarterLength = 4
+            new_chord = chord.Chord(notes, duration=d)
             new_chord.offset = offset
             output_notes.append(new_chord)
         # pattern is a note
         else:
-            new_note = note.Note(pattern)
+            d = duration.Duration()
+            d.quarterLength = 4
+            new_note = note.Note(pattern, duration=d)
             new_note.offset = offset
             new_note.storedInstrument = instrument.Piano()
             output_notes.append(new_note)
 
         # increase offset each iteration so that notes do not stack
-        offset += 0.5
+        offset += 4
 
     midi_stream = stream.Stream(output_notes)
 
     midi_stream.write('midi', fp='test_output.mid')
+
+def sample(preds, temperature=1.0):
+    preds = numpy.asarray(preds).astype('float64')
+    preds = numpy.log(preds) / temperature
+    exp_preds = numpy.exp(preds)
+    preds = exp_preds / numpy.sum(exp_preds)
+    probas = numpy.random.multinomial(1, preds, 1)
+    return numpy.argmax(probas)
+
 
 if __name__ == '__main__':
     generate()
