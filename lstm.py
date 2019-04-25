@@ -6,7 +6,7 @@ import numpy
 from music21 import converter, instrument, note, chord
 from keras.utils import np_utils
 from keras.callbacks import ModelCheckpoint
-from keras.layers import Dense, CuDNNLSTM, Embedding, Input, Dropout, LSTM
+from keras.layers import Dense, CuDNNLSTM, Embedding, Input, Dropout, LSTM, concatenate, SpatialDropout1D
 from keras.models import Model, model_from_json
 import math
 from keras.utils import Sequence, get_file
@@ -17,21 +17,25 @@ REST = '0'
 
 def train_network():
     """ Train a Neural Network to generate music """
-    notes = get_notes()
+    notes, durations = get_notes()
 
     # get amount of pitch names
     n_vocab = len(set(notes))
+    n_durations = len(set(durations))
     print('The vocabulary is', n_vocab)
+    print('The durations vocabulary is', n_durations)
 
-    network_input, network_output = prepare_sequences(notes, n_vocab)
+    notes_input, notes_output = prepare_sequences(notes, n_vocab)
+    durations_input, durations_output = prepare_sequences(durations, n_durations)
 
-    model = create_network(network_input, n_vocab, set(notes))
+    model = create_network(n_vocab, set(notes), set(durations))
 
-    train(model, network_input, network_output)
+    #train(model, notes_input, notes_output, durations_input, durations_output)
 
 def get_notes():
     """ Get all the notes and chords from the midi files in the ./midi_songs directory """
     notes = []
+    durations = []
 
     for file in glob.glob("midi_songs/*.mid"):
         midi = converter.parse(file)
@@ -48,48 +52,22 @@ def get_notes():
 
         for element in notes_to_parse:
             if isinstance(element, note.Note):
-                #print(str(element.pitch), element.pitch.pitchClass)
-                note_class = element.pitch.pitchClass
-                for i in range(0, int(float(element.duration.quarterLength)/0.25)):
-                    curr_time = [REST]*12
-
-                    if i == 0:
-                        curr_time[note_class] = B_NOTE
-                    else:
-                        curr_time[note_class] = I_NOTE
-
-                    notes.append(curr_time)
-                #s.add(element.name)
+                notes.append(str(element.pitch))
+                #print(element.name, element.duration.quarterLength, element.offset)
+                durations.append(str(element.duration.quarterLength))
             elif isinstance(element, chord.Chord):
-                #print(str(element.normalOrder), float(element.duration.quarterLength))
-                #notes.append('.'.join(str(n) for n in element.normalOrder))
+                notes.append('.'.join(str(n) for n in element.normalOrder))
+                #print(element.name, element.duration.quarterLength, element.offset)
+                durations.append(str(element.duration.quarterLength))
 
-                for i in range(0, int(float(element.duration.quarterLength)/0.25)):
-                    curr_time = [REST]*12
-
-                    for n in element.normalOrder:
-                        note_class = n
-                        if i == 0:
-                            curr_time[note_class] = B_NOTE
-                        else:
-                            curr_time[note_class] = I_NOTE
-
-                    notes.append(curr_time)
-            elif isinstance(element, note.Rest):
-                for i in range(0, int(float(element.duration.quarterLength)/0.25)):
-                    curr_time = [REST]*12
-
-                    notes.append(curr_time)
-
-
-    str_notation_notes = []
-    for time in notes:
-        str_notation_notes.append('.'.join(time))
 
     with open('data/notes', 'wb') as filepath:
-        pickle.dump(str_notation_notes, filepath)
+        pickle.dump(notes, filepath)
 
-    return str_notation_notes
+    with open('data/durations', 'wb') as filepath:
+        pickle.dump(durations, filepath)
+
+    return notes, durations
 
 def prepare_sequences(notes, n_vocab):
     """ Prepare the sequences used by the Neural Network """
@@ -122,32 +100,41 @@ def prepare_sequences(notes, n_vocab):
 
     return (network_input, network_output)
 
-def create_network(network_input, n_vocab, pitchnames):
+def create_network(n_vocab, pitchnames, unique_durations):
     """ create the structure of the neural network """
-    input_layer = Input(shape=(None,))
-    emb_node = Embedding(input_dim=len(pitchnames)+1, output_dim=50)(input_layer)
+    notes_in = Input(shape=(None,))
+    emb_notes = Embedding(input_dim=len(pitchnames)+1, output_dim=32)(notes_in)
+
+    duration_in = Input(shape=(None,))
+    emb_dur = Embedding(input_dim=len(unique_durations)+1, output_dim=10)(duration_in)
+
+    x = concatenate([emb_notes, emb_dur])
+    x = SpatialDropout1D(0.3)(x)
+
     x = LSTM(
-        256,
+        512,
         return_sequences=True,
-        recurrent_dropout=0.2,
-    )(emb_node)
-    x = LSTM(
-        256,
-        return_sequences=True,
-        recurrent_dropout=0.2,
+        recurrent_dropout=0.3,
     )(x)
     x = LSTM(
-        256,
+        512,
+        return_sequences=True,
+        recurrent_dropout=0.3,
+    )(x)
+    x = LSTM(
+        512,
     )(x)
     x = Dense(512)(x)
-    output_layer = Dense(n_vocab, activation='softmax')(x)
+    notes_out = Dense(n_vocab, activation='softmax', name='notes')(x)
+    duration_out = Dense(len(unique_durations), activation='softmax', name='duration')(x)
 
-    model = Model(inputs=input_layer, outputs=output_layer)
-    model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
+
+    model = Model(inputs=[notes_in, duration_in], outputs=[notes_out, duration_out])
+    model.compile(loss=['categorical_crossentropy', 'categorical_crossentropy'], loss_weights=[1.0, 0.5], optimizer='rmsprop')
 
     return model
 
-def train(model, network_input, network_output):
+def train(model, notes_input, notes_output, durations_input, durations_output):
     """ train the neural network """
     filepath = "weights-improvement-{epoch:02d}-{loss:.4f}-bigger.hdf5"
     checkpoint = ModelCheckpoint(
@@ -159,33 +146,40 @@ def train(model, network_input, network_output):
     )
     callbacks_list = [checkpoint]
 
-    train_seq = TrainSequence(network_input, network_output, 128)
+    model.load_weights('weights-improvement-100-0.4858-bigger.hdf5')
+
+    train_seq = TrainSequence(notes_input, notes_output, durations_input, durations_output, 128)
 
     model.fit_generator(
         generator=train_seq,
-        epochs=100,
+        epochs=400,
         verbose=1,
         shuffle=False,
-        callbacks=callbacks_list
+        callbacks=callbacks_list,
+        initial_epoch=100
     )
 
 
 
 class TrainSequence(Sequence):
 
-    def __init__(self, x, y, batch_size=1, preprocess=None):
-        self.x = x
-        self.y = y
+    def __init__(self, notes_input, notes_output, durations_input, durations_output, batch_size=1, preprocess=None):
+        self.notes_in = notes_input
+        self.notes_out = notes_output
+        self.durations_in = durations_input
+        self.durations_out = durations_output
         self.batch_size = batch_size
 
     def __getitem__(self, idx):
-        batch_x = self.x[idx * self.batch_size: (idx + 1) * self.batch_size]
-        batch_y = self.y[idx * self.batch_size: (idx + 1) * self.batch_size]
+        batch_notes_in = self.notes_in[idx * self.batch_size: (idx + 1) * self.batch_size]
+        batch_durations_in = self.durations_in[idx * self.batch_size: (idx + 1) * self.batch_size]
+        batch_notes_out = self.notes_out[idx * self.batch_size: (idx + 1) * self.batch_size]
+        batch_durations_out = self.durations_out[idx * self.batch_size: (idx + 1) * self.batch_size]
 
-        return numpy.asarray(batch_x), numpy.asarray(batch_y)
+        return [numpy.asarray(batch_notes_in), numpy.asarray(batch_durations_in)], [numpy.asarray(batch_notes_out), numpy.asarray(batch_durations_out)]
 
     def __len__(self):
-        return math.ceil(len(self.x) / self.batch_size)
+        return math.ceil(len(self.notes_in) / self.batch_size)
 
 
 
