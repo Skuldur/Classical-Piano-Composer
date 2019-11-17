@@ -9,6 +9,7 @@ from keras.layers import Dense
 from keras.layers import Dropout
 from keras.layers import LSTM
 from keras.layers import Activation
+from keras.layers import BatchNormalization as BatchNorm
 from keras.utils import np_utils
 from keras.callbacks import ModelCheckpoint
 
@@ -90,13 +91,16 @@ def create_network(network_input, n_vocab):
     model.add(LSTM(
         512,
         input_shape=(network_input.shape[1], network_input.shape[2]),
+        recurrent_dropout=0.3,
         return_sequences=True
     ))
-    model.add(Dropout(0.3))
-    model.add(LSTM(512, return_sequences=True))
-    model.add(Dropout(0.3))
+    model.add(LSTM(512, return_sequences=True, recurrent_dropout=0.3,))
     model.add(LSTM(512))
+    model.add(BatchNorm())
+    model.add(Dropout(0.3))
     model.add(Dense(256))
+    model.add(Activation('relu'))
+    model.add(BatchNorm())
     model.add(Dropout(0.3))
     model.add(Dense(n_vocab))
     model.add(Activation('softmax'))
@@ -116,7 +120,7 @@ def train(model, network_input, network_output):
     )
     callbacks_list = [checkpoint]
 
-    model.fit(network_input, network_output, epochs=200, batch_size=64, callbacks=callbacks_list)
+    model.fit(network_input, network_output, epochs=200, batch_size=128, callbacks=callbacks_list)
 
 if __name__ == '__main__':
     train_network()
