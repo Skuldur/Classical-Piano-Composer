@@ -136,4 +136,7 @@ def create_midi(prediction_output):
     midi_stream.write('midi', fp='test_output.mid')
 
 if __name__ == '__main__':
-    generate(sys.argv[1])
+    if len(sys.argv) == 2:
+        generate(sys.argv[1])
+    else:
+        print("You need to invoke this script with an argument specifying a weight file e.g. : python predict.py weights.hdf5")
