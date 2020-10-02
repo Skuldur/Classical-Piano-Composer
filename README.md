@@ -27,12 +27,12 @@ The network will use every midi file in ./midi_songs to train the network. The m
 
 ## Generating music
 
-Once you have trained the network you can generate text using **predict.py**
+Once you have trained the network you can generate music using the **predict.py** script with the weight file generated in the previous step.
 
 E.g.
 
 ```
-python predict.py
+python predict.py weights.hdf5
 ```
 
-You can run the prediction file right away using the **weights.hdf5** file
+You can run the prediction script right away using the **weights.hdf5** file which is a weight file genereted with the default dataset provided in the midi_songs folder
