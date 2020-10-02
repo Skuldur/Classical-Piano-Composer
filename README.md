@@ -35,4 +35,4 @@ E.g.
 python predict.py weights.hdf5
 ```
 
-You can run the prediction script right away using the **weights.hdf5** file which is a weight file genereted with the default dataset provided in the data folder
+You can run the prediction script right away using the **weights.hdf5** file which is a weight file genereted with the default dataset provided in the midi_songs folder

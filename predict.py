@@ -1,5 +1,6 @@
 """ This module generates notes for a midi file using the
     trained neural network """
+import sys
 import pickle
 import numpy
 from music21 import instrument, note, stream, chord
@@ -10,7 +11,7 @@ from keras.layers import LSTM
 from keras.layers import BatchNormalization as BatchNorm
 from keras.layers import Activation
 
-def generate():
+def generate(weight_file):
     """ Generate a piano midi file """
     #load the notes used to train the model
     with open('data/notes', 'rb') as filepath:
@@ -22,7 +23,7 @@ def generate():
     n_vocab = len(set(notes))
 
     network_input, normalized_input = prepare_sequences(notes, pitchnames, n_vocab)
-    model = create_network(normalized_input, n_vocab)
+    model = create_network(normalized_input, n_vocab, weight_file)
     prediction_output = generate_notes(model, network_input, pitchnames, n_vocab)
     create_midi(prediction_output)
 
@@ -49,7 +50,7 @@ def prepare_sequences(notes, pitchnames, n_vocab):
 
     return (network_input, normalized_input)
 
-def create_network(network_input, n_vocab):
+def create_network(network_input, n_vocab, weight_file):
     """ create the structure of the neural network """
     model = Sequential()
     model.add(LSTM(
@@ -135,4 +136,4 @@ def create_midi(prediction_output):
     midi_stream.write('midi', fp='test_output.mid')
 
 if __name__ == '__main__':
-    generate()
+    generate(sys.argv[1])
