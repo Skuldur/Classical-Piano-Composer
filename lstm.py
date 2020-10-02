@@ -31,9 +31,9 @@ def get_notes():
     notes = []
 
     for file in glob.glob("midi_songs/*.mid"):
-        midi = converter.parse(file)
-
         print("Parsing %s" % file)
+
+        midi = converter.parse(file)
 
         notes_to_parse = None
 
