@@ -13,12 +13,14 @@ This project allows you to train a neural network to generate midi music files t
 
 ## Training
 
-To train the network you run **musicLSTM.py**.
+To train the network you run **musicLSTM.py**. Required to have a midi folder, a folder named `notes_data` to store the generated notes, and 
+a folder named `trained_weights` to store the .hdf5 files generated from training. 
 
 E.g.
 
 ```
-python lstm.py
+from musicLSTM import train_network
+train_network()
 ```
 
 The network will use every midi file in ./midi_songs to train the network. The midi files should only contain a single instrument to get the most out of the training.
@@ -27,12 +29,14 @@ The network will use every midi file in ./midi_songs to train the network. The m
 
 ## Generating music
 
-Once you have trained the network you can generate text using **musicPredict.py**
+Once you have trained the network you can generate text using **musicPredict.py**. Select the note files from `notes_data` folder and weights file from `trained_weights`
+folder, then save the generated midi output into a folder named `generated_songs`. 
 
 E.g.
 
 ```
-python predict.py
+from musicPredict import generate_midi
+generate_midi()
 ```
 
 You can run the prediction file right away using the **weights.hdf5** file
