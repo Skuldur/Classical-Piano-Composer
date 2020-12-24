@@ -13,7 +13,7 @@ This project allows you to train a neural network to generate midi music files t
 
 ## Training
 
-To train the network you run **lstm.py**.
+To train the network you run **musicLSTM.py**.
 
 E.g.
 
@@ -27,7 +27,7 @@ The network will use every midi file in ./midi_songs to train the network. The m
 
 ## Generating music
 
-Once you have trained the network you can generate text using **predict.py**
+Once you have trained the network you can generate text using **musicPredict.py**
 
 E.g.
 
