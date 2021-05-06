@@ -2,6 +2,7 @@
     trained neural network """
 import pickle
 import numpy
+import tensorflow as tf
 from music21 import instrument, note, stream, chord
 from keras.models import Sequential
 from keras.layers import Dense
@@ -59,14 +60,12 @@ def create_network(network_input, n_vocab):
         LSTM(
             512,
             input_shape=(network_input.shape[1], network_input.shape[2]),
-            recurrent_dropout=0.3,
             return_sequences=True,
         )
     )
     model.add(
         LSTM(
             512,
-            return_sequences=True,
             recurrent_dropout=0.3,
         )
     )
@@ -149,4 +148,8 @@ def create_midi(prediction_output):
 
 
 if __name__ == "__main__":
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    for gpu in gpus:
+        tf.config.experimental.set_memory_growth(gpu, True)
+
     generate()
