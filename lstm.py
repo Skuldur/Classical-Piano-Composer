@@ -1,19 +1,15 @@
 """ This module prepares midi file data and feeds it to the neural
     network for training """
+import os
 import glob
 import pickle
 import numpy
 import tensorflow as tf
-import os
 from music21 import converter, instrument, note, chord
-from keras.models import Sequential, load_model
-from keras.layers import Dense
-from keras.layers import Dropout
-from keras.layers import LSTM
-from keras.layers import Activation
-from keras.layers import BatchNormalization as BatchNorm
+from keras.models import load_model
 from keras.utils import np_utils
 from keras.callbacks import ModelCheckpoint
+from network import create_network
 
 
 def train_network():
@@ -43,13 +39,11 @@ def get_notes():
     for file in glob.glob("midi_songs/*.mid"):
         midi = converter.parse(file)
 
-        print("Parsing %s" % file)
-
-        notes_to_parse = None
+        print(f"Parsing {file}")
 
         try:  # file has instrument parts
-            s2 = instrument.partitionByInstrument(midi)
-            notes_to_parse = s2.parts[0].recurse()
+            instrument_stream = instrument.partitionByInstrument(midi)
+            notes_to_parse = instrument_stream.parts[0].recurse()
         except:  # file has notes in a flat structure
             notes_to_parse = midi.flat.notes
 
@@ -97,36 +91,6 @@ def prepare_sequences(notes, n_vocab):
     return (network_input, network_output)
 
 
-def create_network(network_input, n_vocab):
-    """create the structure of the neural network"""
-    model = Sequential()
-    model.add(
-        LSTM(
-            512,
-            input_shape=(network_input.shape[1], network_input.shape[2]),
-            return_sequences=True
-        )
-    )
-    model.add(
-        LSTM(
-            512,
-            return_sequences=True
-        )
-    )
-    model.add(LSTM(512))
-    model.add(BatchNorm())
-    model.add(Dropout(0.3))
-    model.add(Dense(256))
-    model.add(Activation("relu"))
-    model.add(BatchNorm())
-    model.add(Dropout(0.3))
-    model.add(Dense(n_vocab))
-    model.add(Activation("softmax"))
-    model.compile(loss="categorical_crossentropy", optimizer="rmsprop")
-
-    return model
-
-
 def train(model, network_input, network_output):
     """train the neural network"""
     filepath = "checkpoints/weights-improvement-{epoch:02d}-{loss:.4f}-bigger.hdf5"
@@ -145,7 +109,7 @@ def train(model, network_input, network_output):
 
 
 if __name__ == "__main__":
-    gpus = tf.config.experimental.list_physical_devices('GPU')
+    gpus = tf.config.experimental.list_physical_devices("GPU")
     for gpu in gpus:
         tf.config.experimental.set_memory_growth(gpu, True)
 

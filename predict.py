@@ -4,12 +4,7 @@ import pickle
 import numpy
 import tensorflow as tf
 from music21 import instrument, note, stream, chord
-from keras.models import Sequential
-from keras.layers import Dense
-from keras.layers import Dropout
-from keras.layers import LSTM
-from keras.layers import BatchNormalization as BatchNorm
-from keras.layers import Activation
+from network import create_network
 
 
 def generate():
@@ -24,7 +19,7 @@ def generate():
     n_vocab = len(set(notes))
 
     network_input, normalized_input = prepare_sequences(notes, pitchnames, n_vocab)
-    model = create_network(normalized_input, n_vocab)
+    model = create_network(normalized_input, n_vocab, "weights.hdf5")
     prediction_output = generate_notes(model, network_input, pitchnames, n_vocab)
     create_midi(prediction_output)
 
@@ -46,44 +41,10 @@ def prepare_sequences(notes, pitchnames, n_vocab):
     n_patterns = len(network_input)
 
     # reshape the input into a format compatible with LSTM layers
-    normalized_input = numpy.reshape(network_input, (n_patterns, sequence_length, 1))
-    # normalize input
-    normalized_input = normalized_input / float(n_vocab)
+    unnormalized_input = numpy.reshape(network_input, (n_patterns, sequence_length, 1))
+    normalized_input = unnormalized_input / float(n_vocab)
 
     return (network_input, normalized_input)
-
-
-def create_network(network_input, n_vocab):
-    """create the structure of the neural network"""
-    model = Sequential()
-    model.add(
-        LSTM(
-            512,
-            input_shape=(network_input.shape[1], network_input.shape[2]),
-            return_sequences=True,
-        )
-    )
-    model.add(
-        LSTM(
-            512,
-            recurrent_dropout=0.3,
-        )
-    )
-    model.add(LSTM(512))
-    model.add(BatchNorm())
-    model.add(Dropout(0.3))
-    model.add(Dense(256))
-    model.add(Activation("relu"))
-    model.add(BatchNorm())
-    model.add(Dropout(0.3))
-    model.add(Dense(n_vocab))
-    model.add(Activation("softmax"))
-    model.compile(loss="categorical_crossentropy", optimizer="rmsprop")
-
-    # Load the weights to each node
-    model.load_weights("weights.hdf5")
-
-    return model
 
 
 def generate_notes(model, network_input, pitchnames, n_vocab):
@@ -97,7 +58,7 @@ def generate_notes(model, network_input, pitchnames, n_vocab):
     prediction_output = []
 
     # generate 500 notes
-    for note_index in range(500):
+    for _ in range(500):
         prediction_input = numpy.reshape(pattern, (1, len(pattern), 1))
         prediction_input = prediction_input / float(n_vocab)
 
@@ -148,7 +109,7 @@ def create_midi(prediction_output):
 
 
 if __name__ == "__main__":
-    gpus = tf.config.experimental.list_physical_devices('GPU')
+    gpus = tf.config.experimental.list_physical_devices("GPU")
     for gpu in gpus:
         tf.config.experimental.set_memory_growth(gpu, True)
 
