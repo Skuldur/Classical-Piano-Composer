@@ -24,7 +24,7 @@ def train_network():
     checkpoints = ["checkpoints/" + name for name in os.listdir("checkpoints/")]
     if checkpoints:
         latest_checkpoint = max(checkpoints, key=os.path.getctime)
-        print(f"Restoring from the lastest checkpoint: {latest_checkpoint}")
+        print(f"*** Restoring from the lastest checkpoint: {latest_checkpoint} ***")
         model = load_model(latest_checkpoint)
     else:
         model = create_network(network_input, n_vocab)

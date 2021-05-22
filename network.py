@@ -29,7 +29,7 @@ def create_network(network_input, n_vocab, weights_filename=None):
     model.compile(loss="categorical_crossentropy", optimizer="rmsprop")
 
     if weights_filename:
-        print(f"Loading weights from {weights_filename}")
+        print(f"*** Loading weights from {weights_filename} ***")
         model.load_weights(weights_filename)
 
     return model

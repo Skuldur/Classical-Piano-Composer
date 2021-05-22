@@ -1,10 +1,31 @@
 """ This module generates notes for a midi file using the
     trained neural network """
+import os
+import datetime
+import sys
 import pickle
 import numpy
 import tensorflow as tf
 from music21 import instrument, note, stream, chord
 from network import create_network
+
+
+def get_best_weights_filename():
+    checkpoints = ["checkpoints/" + name for name in os.listdir("checkpoints/")]
+    if checkpoints:
+        lowest_loss = sys.float_info.max
+        best_checkpoint = checkpoints[0]
+
+        for checkpoint in checkpoints:
+            loss = float(checkpoint.split("-")[3])
+
+            if loss < lowest_loss:
+                best_checkpoint = checkpoint
+
+        print(f"*** Found checkpoint with the best weights: {best_checkpoint} ***")
+        return best_checkpoint
+    else:
+        raise Exception("Couldn't find any weights in the checkpoints/ directory.")
 
 
 def generate():
@@ -19,7 +40,7 @@ def generate():
     n_vocab = len(set(notes))
 
     network_input, normalized_input = prepare_sequences(notes, pitchnames, n_vocab)
-    model = create_network(normalized_input, n_vocab, "weights.hdf5")
+    model = create_network(normalized_input, n_vocab, get_best_weights_filename())
     prediction_output = generate_notes(model, network_input, pitchnames, n_vocab)
     create_midi(prediction_output)
 
@@ -105,7 +126,7 @@ def create_midi(prediction_output):
 
     midi_stream = stream.Stream(output_notes)
 
-    midi_stream.write("midi", fp="test_output.mid")
+    midi_stream.write("midi", fp=f"results/output-{datetime.datetime.now()}.mid")
 
 
 if __name__ == "__main__":
