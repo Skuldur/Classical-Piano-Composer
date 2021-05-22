@@ -4,14 +4,14 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [dev-packages]
-black = "*"
 pylint = "*"
 
 [packages]
-music21 = "*"
-h5py = "*"
-keras = "*"
-tensorflow = "*"
+music21 = "~=6.7.1"
+h5py = "~=2.10.0"
+keras = "~=2.4.3"
+tensorflow = "~=2.4.0"
+wget = "~=3.2"
 
 [requires]
 python_version = "3.8"
