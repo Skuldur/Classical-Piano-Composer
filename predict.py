@@ -2,6 +2,7 @@
     trained neural network """
 import pickle
 import numpy
+import sys
 from music21 import instrument, note, stream, chord
 from keras.models import Sequential
 from keras.layers import Dense
@@ -9,6 +10,7 @@ from keras.layers import Dropout
 from keras.layers import LSTM
 from keras.layers import BatchNormalization as BatchNorm
 from keras.layers import Activation
+from tqdm import tqdm
 
 def generate():
     """ Generate a piano midi file """
@@ -85,8 +87,12 @@ def generate_notes(model, network_input, pitchnames, n_vocab):
     pattern = network_input[start]
     prediction_output = []
 
-    # generate 500 notes
-    for note_index in range(500):
+    notesnumber = input("How many should be outputted?: ")
+    try: 
+        numpy.isnan(notesnumber)
+    except TypeError:
+        sys.exit("You didn't type a valid number")
+    for note_index in tqdm(range(notesnumber)):
         prediction_input = numpy.reshape(pattern, (1, len(pattern), 1))
         prediction_input = prediction_input / float(n_vocab)
 
@@ -131,8 +137,9 @@ def create_midi(prediction_output):
         offset += 0.5
 
     midi_stream = stream.Stream(output_notes)
-
-    midi_stream.write('midi', fp='test_output.mid')
+    midiname = input("MIDI Name(W/O extension): ")
+    midiname = midiname + '.mid'
+    midi_stream.write('midi', fp=midiname)
 
 if __name__ == '__main__':
     generate()
