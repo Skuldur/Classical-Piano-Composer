@@ -2,7 +2,6 @@
     network for training """
 import glob
 import pickle
-import joblib
 import numpy
 from music21 import converter, instrument, note, chord
 from keras.models import Sequential
@@ -52,7 +51,6 @@ def get_notes():
 
     with open('data/notes', 'wb') as filepath:
         pickle.dump(notes, filepath)
-        joblib.dump('data/trained_model.joblib', filepath)
 
     return notes
 
@@ -122,7 +120,7 @@ def train(model, network_input, network_output):
     )
     callbacks_list = [checkpoint]
 
-    model.fit(network_input, network_output, epochs=20, batch_size=128, callbacks=callbacks_list)
+    model.fit(network_input, network_output, epochs=200, batch_size=128, callbacks=callbacks_list)
 
 if __name__ == '__main__':
     train_network()
